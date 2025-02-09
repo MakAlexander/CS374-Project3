@@ -43,7 +43,7 @@ void mainMenu() {
             default:
                 fprintf(stderr, "You entered an incorrect choice. Try again.\n");
         }
-    } while (choice != 2);  // Loop continues unless user chooses to exit
+    } while (1);
 
 }
 
@@ -155,7 +155,69 @@ char* specifyFileName() {
     }
 }
 // Data Processing Functions
-    // processFile()
-    // createMovie()
-// Output Fuctions
-    // writeMoviesByYear()
+struct movie* createMovie(char *line) {
+    struct movie *newMovie = malloc(sizeof(struct movie));
+    char *token;
+    char *saveptr;
+
+    token = strtok_r(line, ",", &saveptr);
+    newMovie->title = strdup(token);
+
+    token = strtok_r(NULL, ",", &saveptr);
+    newMovie->year = atoi(token);
+
+    newMovie->next = NULL;
+    return newMovie;
+}
+
+struct movie* processFile(const char* filename) {
+    int fd = open(filename, O_RDONLY);
+    if (fd == -1) {
+        perror("Error opening file");
+        return NULL;
+    }
+
+    FILE *file = fdopen(fd, "r");
+    if (!file) {
+        perror("Error converting file descriptor to file pointer");
+        close(fd);
+        return NULL;
+    }
+
+    char *line = NULL;
+    size_t len = 0;
+    struct movie *head = NULL, *tail = NULL;
+    getline(&line, &len, file); // Skip header
+
+    while (getline(&line, &len, file) != -1) {
+        struct movie *newMovie = createMovie(line);
+        if (!head) {
+            head = newMovie;
+            tail = newMovie;
+        } else {
+            tail->next = newMovie;
+            tail = newMovie;
+        }
+    }
+
+    free(line);
+    fclose(file);
+    return head;
+}
+// Output
+void writeMoviesByYear(struct movie *head, const char *dirName) {
+    while (head) {
+        char filePath[MAX_FILE_NAME];
+        sprintf(filePath, "%s/%d.txt", dirName, head->year);
+
+        int fd = open(filePath, O_WRONLY | O_CREAT | O_APPEND, 0640);
+        if (fd != -1) {
+            dprintf(fd, "%s\n", head->title);
+            close(fd);
+        } else {
+            perror("Error creating year file");
+        }
+        head = head->next;
+    }
+}
+
