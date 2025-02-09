@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <time.h>
 
 #define MAX_FILE_NAME 256
 
@@ -18,6 +19,11 @@ struct movie
 
 void mainMenu();
 void fileSelectionMenu();
+char* findLargestFile();
+char* findSmallestFile();
+char* specifyFileName();
+struct movie* processFile(const char* filename);
+void writeMoviesByYear(struct movie *head, const char *dirName);
 
 int main(void) {
     mainMenu();
@@ -43,7 +49,7 @@ void mainMenu() {
             default:
                 fprintf(stderr, "You entered an incorrect choice. Try again.\n");
         }
-    } while (1);
+    } while (choice != 2);
 
 }
 
@@ -220,4 +226,3 @@ void writeMoviesByYear(struct movie *head, const char *dirName) {
         head = head->next;
     }
 }
-
