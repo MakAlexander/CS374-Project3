@@ -1,3 +1,18 @@
+/*
+Movie File Processor Program
+My program reads CSV files containing movie data, processes the data into a linked list of movie structures,
+and allows the user to interact with the data through a menu.
+
+The user can:
+1. Select a file to process based on size (largest, smallest) or specify a file name.
+2. Process the selected file to create a directory named "makal.movies.[random_number]".
+3. Parse movies by their release year and write each year's movies to separate txt files within the created directory.
+4. Exit the program.
+
+Each new directory has 'rwxr-x---' permissions, while the output txt files for each year have 'rw-r-----' permissions.
+*/
+
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +23,7 @@
 #include <time.h>
 
 #define MAX_FILE_NAME 256
+#define MIN_FILE_SIZE 2000000000 // =(2 gb). Hoping no CSV file will be larger than that
 
 // Define struct for movie
 struct movie
@@ -80,16 +96,17 @@ void fileSelectionMenu() {
         printf("Now processing the chosen file named %s\n", filename);
         struct movie *movies = processFile(filename);
         free(filename);
-
+    
+    // Creating new directories for the movies
         if (movies != NULL) {
             srand(time(NULL));
             int random_num = rand() % 100000;
-            char dir_name[50];
-            sprintf(dir_name, "makal.movies.%d", random_num);
+            char moviesDir[20];
+            sprintf(moviesDir, "makal.movies.%d", random_num);
             
-            if (mkdir(dir_name, 0750) == 0) {
-                printf("Created directory with name %s\n", dir_name);
-                writeMoviesByYear(movies, dir_name);
+            if (mkdir(moviesDir, 0750) == 0) {           // rwxr-x--- permission
+                printf("Created directory with name %s\n", moviesDir);
+                writeMoviesByYear(movies, moviesDir);
             } else {
                 perror("Error creating directory");
             }
@@ -99,51 +116,51 @@ void fileSelectionMenu() {
     
 // File Handling Functions
 char* findLargestFile() {
-    DIR *d;
-    struct dirent *dir;
+    DIR *dir;
+    struct dirent *movie_file;
     struct stat file_stat;
     char *largest_file = NULL;
     off_t max_size = 0;
 
-    d = opendir(".");
-    if (d) {
-        while ((dir = readdir(d)) != NULL) {
-            if (strncmp(dir->d_name, "movies_", 7) == 0 && strstr(dir->d_name, ".csv") != NULL) {
-                if (stat(dir->d_name, &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
+    dir = opendir(".");
+    if (dir) {
+        while ((movie_file = readdir(dir)) != NULL) {
+            if (strncmp(movie_file->d_name, "movies_", 7) == 0 && strstr(movie_file->d_name, ".csv") != NULL) {
+                if (stat(movie_file->d_name, &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
                     if (file_stat.st_size > max_size) {
                         max_size = file_stat.st_size;
                         free(largest_file);
-                        largest_file = strdup(dir->d_name);
+                        largest_file = strdup(movie_file->d_name);
                     }
                 }
             }
         }
-        closedir(d);
+        closedir(dir);
     }
     return largest_file;
 }
 
 char* findSmallestFile() {
-    DIR *d;
-    struct dirent *dir;
+    DIR *dir;
+    struct dirent *movie_file;
     struct stat file_stat;
     char *smallest_file = NULL;
-    off_t min_size = __LONG_MAX__;
+    off_t min_size = MIN_FILE_SIZE;
 
-    d = opendir(".");
-    if (d) {
-        while ((dir = readdir(d)) != NULL) {
-            if (strncmp(dir->d_name, "movies_", 7) == 0 && strstr(dir->d_name, ".csv") != NULL) {
-                if (stat(dir->d_name, &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
+    dir = opendir(".");
+    if (dir) {
+        while ((movie_file = readdir(dir)) != NULL) {
+            if (strncmp(movie_file->d_name, "movies_", 7) == 0 && strstr(movie_file->d_name, ".csv") != NULL) {
+                if (stat(movie_file->d_name, &file_stat) == 0 && S_ISREG(file_stat.st_mode)) {
                     if (file_stat.st_size < min_size) {
                         min_size = file_stat.st_size;
                         free(smallest_file);
-                        smallest_file = strdup(dir->d_name);
+                        smallest_file = strdup(movie_file->d_name);
                     }
                 }
             }
         }
-        closedir(d);
+        closedir(dir);
     }
     return smallest_file;
 }
@@ -177,23 +194,23 @@ struct movie* createMovie(char *line) {
 }
 
 struct movie* processFile(const char* filename) {
-    int fd = open(filename, O_RDONLY);
-    if (fd == -1) {
+    int file_descriptor = open(filename, O_RDONLY);
+    if (file_descriptor == -1) {
         perror("Error opening file");
         return NULL;
     }
 
-    FILE *file = fdopen(fd, "r");
+    FILE *file = fdopen(file_descriptor, "r");
     if (!file) {
         perror("Error converting file descriptor to file pointer");
-        close(fd);
+        close(file_descriptor);
         return NULL;
     }
 
     char *line = NULL;
     size_t len = 0;
     struct movie *head = NULL, *tail = NULL;
-    getline(&line, &len, file); // Skip header
+    getline(&line, &len, file);
 
     while (getline(&line, &len, file) != -1) {
         struct movie *newMovie = createMovie(line);
@@ -216,10 +233,10 @@ void writeMoviesByYear(struct movie *head, const char *dirName) {
         char filePath[MAX_FILE_NAME];
         sprintf(filePath, "%s/%d.txt", dirName, head->year);
 
-        int fd = open(filePath, O_WRONLY | O_CREAT | O_APPEND, 0640);
-        if (fd != -1) {
-            dprintf(fd, "%s\n", head->title);
-            close(fd);
+        int file_descriptor = open(filePath, O_WRONLY | O_CREAT | O_APPEND, 0640); // rw-r----- permission
+        if (file_descriptor != -1) {
+            dprintf(file_descriptor, "%s\n", head->title);
+            close(file_descriptor);
         } else {
             perror("Error creating year file");
         }
